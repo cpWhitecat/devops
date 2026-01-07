@@ -1,0 +1,44 @@
+name: Security Scan with SQLMap
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Scan target (example: http://localhost:8080)'
+        required: false
+
+jobs:
+  security-scan:
+    name: Run sqlmap scan on self-hosted CentOS runner
+    runs-on: [self-hosted, linux]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create scans directory
+        run: mkdir -p ${{ github.workspace }}/scans
+
+      - name: Build scanner Docker image
+        run: docker build -t security-scanner:latest devops/security-scanner/
+
+      - name: Run scanner container
+        env:
+          TARGET: ${{ github.event.inputs.target || secrets.SCAN_TARGET }}
+        run: |
+          if [ -z "${TARGET}" ]; then
+            echo "No scan target provided. Set workflow input 'target' or repository secret 'SCAN_TARGET'."
+            exit 1
+          fi
+          docker run --rm \
+            -e TARGET="$TARGET" \
+            -v "${{ github.workspace }}/scans:/scans" \
+            security-scanner:latest
+
+      - name: Upload scan report
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-scan-report
+          path: ${{ github.workspace }}/scans/**/report.html

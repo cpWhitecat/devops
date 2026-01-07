@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: 'Scan target (example: http://localhost:8080)'
+        description: 'http://192.168.159.16:8080'
         required: false
 
 jobs:

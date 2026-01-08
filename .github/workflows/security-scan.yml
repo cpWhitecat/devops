@@ -3,42 +3,60 @@ name: Security Scan with SQLMap
 on:
   push:
     branches: [ main ]
+  # 支持手动触发，并可输入目标 URL
   workflow_dispatch:
     inputs:
       target:
-        description: 'http://192.168.159.16:8080'
+        description: 'Target URL (e.g., http://192.168.159.16:8080)'
         required: false
+        default: 'http://192.168.159.16:8080'
 
 jobs:
   security-scan:
-    name: Run sqlmap scan on self-hosted CentOS runner
+    name: SQLMap Scan and Sophisticated Reporting
+    # 使用您的自建 CentOS Runner
     runs-on: [self-hosted, linux]
     
     steps:
+      # 1. 拉取最新的代码
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Create scans directory
-        run: mkdir -p ${{ github.workspace }}/scans
+      # 2. 准备扫描结果存放目录，并赋予权限
+      - name: Prepare Workspace
+        run: |
+          mkdir -p ${{ github.workspace }}/scans
+          chmod 777 ${{ github.workspace }}/scans
 
-      - name: Build scanner Docker image
+      # 3. 构建 Docker 扫描镜像
+      - name: Build Scanner Image
         run: docker build -t security-scanner:latest security-scanner/
 
-      - name: Run scanner container
+      # 4. 执行扫描容器
+      # 使用 || true 确保扫描即使发现漏洞或网络超时，也不会直接中断 Workflow，以便后续生成报告
+      - name: Execute SQLMap Scan
         env:
           TARGET: ${{ github.event.inputs.target || secrets.SCAN_TARGET }}
         run: |
           if [ -z "${TARGET}" ]; then
-            echo "No scan target provided. Set workflow input 'target' or repository secret 'SCAN_TARGET'."
+            echo "Error: SCAN_TARGET is not defined."
             exit 1
           fi
+          echo "Starting scan for: $TARGET"
           docker run --rm \
             -e TARGET="$TARGET" \
             -v "${{ github.workspace }}/scans:/scans" \
-            security-scanner:latest
+            security-scanner:latest || echo "Scan execution finished (check logs for details)"
 
-      - name: Upload scan report
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-scan-report
-          path: ${{ github.workspace }}/scans/**/report.html
+      # 5. 生成精致的 HTML 报告
+      # 使用 Python 处理 SQLMap 产生的 run.log
+      - name: Generate Sophisticated HTML Report
+        if: always() # 无论扫描是否成功连通，都尝试生成报告
+        run: |
+          # 定位 SQLMap 创建的子目录（通常以 IP/域名命名）
+          SCAN_DIR=$(ls -td ${{ github.workspace }}/scans/*/ | head -1)
+          
+          if [ -n "$SCAN_DIR" ]; then
+            echo "Found scan results in: $SCAN_DIR"
+            # 执行修复后的 Python 报告生成脚本
+            python3 generate_

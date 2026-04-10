@@ -8,7 +8,7 @@ on:
       target:
         description: '扫描目标 URL'
         required: false
-        default: 'http://192.168.159.16'
+        default: 'http://localhost:8080/vulnerabilities/sqli/?id=1&Submit=Submit'
 
 jobs:
   security-scan:

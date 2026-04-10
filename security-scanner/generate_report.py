@@ -44,14 +44,24 @@ def analyze(text):
         "dbms": "Unknown"
     }
     url_match = re.search(r"testing URL '(.+?)'", text, re.I)
-    if url_match: metadata["target"] = url_match.group(1)
-    
+    if url_match:
+        metadata["target"] = url_match.group(1)
+
     dbms_match = re.search(r"back-end DBMS: '(.+?)'", text, re.I)
-    if dbms_match: metadata["dbms"] = dbms_match.group(1)
+    if dbms_match:
+        metadata["dbms"] = dbms_match.group(1)
 
-    return list(set(detected_descriptions)), lines, metadata
+    # 提取Payload和HTTP响应码，供漏洞详情高亮
+    payloads = [m.group(1).strip() for m in re.finditer(r"payload:\s*(.+)", text, re.I)]
+    http_codes = [m.group(1) for m in re.finditer(r"(?:HTTP/\d\.\d\s+|response code[:\s]*)(\d{3})", text, re.I)]
+    vuln_details = {
+        "payloads": sorted(set(payloads)),
+        "http_codes": sorted(set(http_codes))
+    }
 
-def render_html(outdir, findings, lines, full_log, metadata):
+    return list(set(detected_descriptions)), lines, metadata, vuln_details
+
+def render_html(outdir, findings, lines, full_log, metadata, vuln_details):
     """
     生成精致的 HTML 报告。
     """
@@ -60,6 +70,9 @@ def render_html(outdir, findings, lines, full_log, metadata):
     risk_level = "HIGH" if vulnerable else "LOW"
     status_text = "发现安全风险" if vulnerable else "未发现明显漏洞"
     status_class = "vuln" if vulnerable else "ok"
+
+    payloads = vuln_details.get('payloads', []) if vuln_details else []
+    http_codes = vuln_details.get('http_codes', []) if vuln_details else []
 
     # 高亮关键词逻辑
     highlighted_lines = []
@@ -90,6 +103,9 @@ def render_html(outdir, findings, lines, full_log, metadata):
     .container {{ max-width: 1100px; margin: 0 auto; }}
     header {{ background: linear-gradient(135deg, var(--primary), #1d4ed8); color: white; padding: 2.5rem; border-radius: 16px; text-align: center; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); margin-bottom: 30px; }}
     .status {{ display: inline-block; padding: 10px 25px; border-radius: 50px; font-weight: bold; border: 2px solid white; margin-top: 15px; text-transform: uppercase; }}
+    .risk-meter {{ height: 14px; border-radius: 999px; margin-top: 8px; }}
+    .risk-meter.high {{ background: linear-gradient(90deg, #dc2626 0%, #f97316 50%, #facc15 100%); }}
+    .risk-meter.low {{ background: linear-gradient(90deg, #16a34a 0%, #4ade80 50%, #86efac 100%); }}
     .vuln {{ background: var(--danger); box-shadow: 0 0 15px rgba(220, 38, 38, 0.5); }}
     .ok {{ background: var(--success); }}
     .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 25px; }}
@@ -115,6 +131,7 @@ def render_html(outdir, findings, lines, full_log, metadata):
         <p><strong>目标地址:</strong> {metadata['target']}</p>
         <p><strong>检测到数据库:</strong> {metadata['dbms']}</p>
         <p><strong>风险评估:</strong> <span style="color: {'var(--danger)' if vulnerable else 'var(--success)'}; font-weight:bold;">{risk_level}</span></p>
+        <div class="risk-meter {'high' if vulnerable else 'low'}" aria-label="风险仪表"></div>
         <p><strong>扫描时间:</strong> {current_time}</p>
       </div>
       <div class="card">
@@ -126,13 +143,29 @@ def render_html(outdir, findings, lines, full_log, metadata):
     </div>
 
     <div class="card">
+      <h2> 漏洞详情（Payload / HTTP 响应码）</h2>
+      <p><strong>Payload</strong>：</p>
+      <ul style="padding-left: 20px;">{''.join([f'<li><code class="highlight">{html.escape(p)}</code></li>' for p in payloads]) if payloads else '<li>未发现具体 payload</li>'}</ul>
+      <p><strong>HTTP 响应码</strong>：</p>
+      <ul style="padding-left: 20px;">{''.join([f'<li><span class="highlight">{c}</span></li>' for c in http_codes]) if http_codes else '<li>未发现 HTTP 响应码</li>'}</ul>
+    </div>
+
+    <div class="card">
+      <h2>🔗 漏洞证链</h2>
+      <p>已提取的 Payload 注入链路（基于已识别 payload）：</p>
+      <p style="background: #fdf2f8; border: 1px solid #fecdd3; border-radius: 8px; padding: 10px; font-family: Consolas, monospace; overflow-x: auto;">{html.escape(' -> '.join(payloads)) if payloads else '无注入 Payload 链路'}</p>
+      <p>已注入载荷关键信息（HTML Escape 保护）：</p>
+      <ul style="padding-left: 20px;">{''.join([f'<li style="background:#fff7ed; padding:4px 8px; border-radius:4px; margin-bottom:4px;">{html.escape(p)}</li>' for p in payloads]) if payloads else '<li>无</li>'}</ul>
+    </div>
+
+    <div class="card">
       <h2>🔍 核心日志证据</h2>
       <pre>{"<br>".join(highlighted_lines) if highlighted_lines else "未提取到关键安全日志。"}</pre>
     </div>
 
     <div class="card">
       <h2>📂 完整扫描输出</h2>
-      <div style="max-height: 500px; overflow-y: auto; border-radius: 8px;">
+      <div class="log-scroll" style="max-height: 500px; overflow-y: auto; border-radius: 8px;">
         <pre style="margin:0">{numbered_log}</pre>
       </div>
     </div>
@@ -141,6 +174,14 @@ def render_html(outdir, findings, lines, full_log, metadata):
       <p>生成的扫描报告仅供安全审计使用 &bull; {current_time}</p>
     </div>
   </div>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const logBox = document.querySelector('.log-scroll');
+      if (logBox) {
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+    });
+  </script>
 </body>
 </html>
 """
@@ -171,8 +212,8 @@ if __name__ == '__main__':
     with open(runlog, 'r', encoding='utf-8', errors='replace') as f:
         content = f.read()
     
-    findings, lines, meta = analyze(content)
+    findings, lines, meta, vuln_details = analyze(content)
     
     # 4. 渲染 HTML
-    report = render_html(base_dir, findings, lines, content, meta)
+    report = render_html(base_dir, findings, lines, content, meta, vuln_details)
     print(f'Successfully generated report: {report}')

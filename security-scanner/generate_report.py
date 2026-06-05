@@ -8,7 +8,7 @@ from datetime import datetime
 def find_runlog(outdir):
     """
     递归查找 run.log 文件。
-    解决 SQLMap 可能生成随机子目录或未生成预期目录的问题。
+    
     """
     for root, dirs, files in os.walk(outdir):
         if 'run.log' in files:
@@ -20,7 +20,7 @@ def analyze(text):
     分析 SQLMap 日志并提取核心特征。
     """
     findings = []
-    # 漏洞匹配模式及其友好描述
+    # 漏洞匹配
     vuln_patterns = [
         (r"is vulnerable", "确认存在 SQL 注入漏洞"),
         (r"vulnerable parameter", "发现可注入参数"),
@@ -35,7 +35,7 @@ def analyze(text):
             detected_descriptions.append(desc)
             findings.append(pat)
 
-    # 提取包含关键动作的行用于展示
+    # 提取关键字
     lines = [l for l in text.splitlines() if re.search(r'parameter|payload|vulnerab|sql injection|notice|critical|error', l, re.I)]
     
     # 尝试提取扫描元数据
@@ -127,7 +127,7 @@ def render_html(outdir, findings, lines, full_log, metadata, vuln_details):
     
     <div class="grid">
       <div class="card">
-        <h2>📊 扫描摘要</h2>
+        <h2>扫描摘要</h2>
         <p><strong>目标地址:</strong> {metadata['target']}</p>
         <p><strong>检测到数据库:</strong> {metadata['dbms']}</p>
         <p><strong>风险评估:</strong> <span style="color: {'var(--danger)' if vulnerable else 'var(--success)'}; font-weight:bold;">{risk_level}</span></p>
@@ -137,7 +137,7 @@ def render_html(outdir, findings, lines, full_log, metadata, vuln_details):
       <div class="card">
         <h2>🚨 安全发现</h2>
         <ul style="padding-left: 20px;">
-          {"".join([f'<li style="margin-bottom:8px">⚠️ {f}</li>' for f in findings]) if findings else '<li>✅ 未发现 SQL 注入漏洞 (对于 Apache 初始页，这属于正常安全状态)。</li>'}
+          {"".join([f'<li style="margin-bottom:8px">️ {f}</li>' for f in findings]) if findings else '<li> 未发现 SQL 注入漏洞 (对于 Apache 初始页，这属于正常安全状态)。</li>'}
         </ul>
       </div>
     </div>
@@ -164,7 +164,7 @@ def render_html(outdir, findings, lines, full_log, metadata, vuln_details):
     </div>
 
     <div class="card">
-      <h2>📂 完整扫描输出</h2>
+      <h2>完整扫描输出</h2>
       <div class="log-scroll" style="max-height: 500px; overflow-y: auto; border-radius: 8px;">
         <pre style="margin:0">{numbered_log}</pre>
       </div>

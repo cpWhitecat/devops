@@ -83,7 +83,7 @@ echo -e "${GREEN}✅ Docker 已安装并运行中${NC}"
 # ============== 检查镜像 ==============
 echo -e "\n${BLUE}🔍 检查 GitHub Runner 镜像...${NC}"
 if ! docker images | grep -q myoung34/github-runner; then
-    echo -e "${YELLOW}⚠️  镜像不存在，开始拉取...${NC}"
+    echo -e "${YELLOW}️  镜像不存在，开始拉取...${NC}"
     docker pull myoung34/github-runner:latest
     echo -e "${GREEN}✅ 镜像拉取完成${NC}"
 else
@@ -95,7 +95,7 @@ fi
 echo -e "\n${BLUE}🧹 检查旧容器...${NC}"
 CONTAINER_NAME="github-runner-${RUNNER_NAME}"
 if docker ps -a | grep -q "$CONTAINER_NAME"; then
-    echo -e "${YELLOW}⚠️  发现旧容器 $CONTAINER_NAME，正在移除...${NC}"
+    echo -e "${YELLOW}️  发现旧容器 $CONTAINER_NAME，正在移除...${NC}"
     docker stop "$CONTAINER_NAME" 2>/dev/null || true
     docker rm "$CONTAINER_NAME" 2>/dev/null || true
     echo -e "${GREEN}✅ 旧容器已清理${NC}"
@@ -150,7 +150,7 @@ else
 fi
 
 # ============== 显示容器信息 ==============
-echo -e "\n${BLUE}📊 容器信息:${NC}"
+echo -e "\n${BLUE}容器信息:${NC}"
 docker ps -f "name=$CONTAINER_NAME" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 # ============== 显示日志 ==============
